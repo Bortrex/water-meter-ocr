@@ -14,7 +14,7 @@ def main():
     parser.add_argument('--learning-rate', type=float, default=2e-4)
     parser.add_argument('--seed', type=int, default=1111)
     parser.add_argument('--checkpoint-dir', type=Path, default=Path('checkpoints/roi'))
-    parser.add_argument('--output-dir', type=Path, default=Path('docs/images/roi'))
+    parser.add_argument('--output-dir', type=Path, default=Path('outputs/roi'))
     parser.add_argument('--residual', action='store_true')
     args = parser.parse_args()
     if args.epochs <= 0 or args.batch_size <= 0 or args.learning_rate <= 0:

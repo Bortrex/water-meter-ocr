@@ -7,6 +7,8 @@ __pycache__/
 kaggle.json
 /data
 /temp
+/checkpoints
+/outputs
 OLD_NRB_digit_recon-sequence_num-Model2.ipynb
 
 *.ipynb_checkpoints

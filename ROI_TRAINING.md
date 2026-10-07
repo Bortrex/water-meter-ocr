@@ -64,6 +64,16 @@ Dropout key. Each update splits the key and saves updated statistics. Validation
 uses running statistics and deterministic Dropout, with no mutable collections.
 `fit` expects a state created with matching learning-rate/residual arguments.
 
+The train step uses `jax.value_and_grad` to calculate loss and parameter gradients
+in one call; BatchNorm's running statistics are carried separately and are not
+optimized by Adam. `jax.jit` compiles repeated train/evaluation steps. Dropout
+needs an explicit key because JAX does not use an implicit global random stream.
+Keeping that key in the checkpointed state preserves the next update after
+restoration without a separate RNG argument or checkpoint format change.
+Evaluation disables Dropout and uses stored statistics, so it needs neither an
+RNG nor mutable state. Gradient-tree finiteness checks live in the smoke script;
+the normal trainer retains its finite-loss/metric checks.
+
 The original split and 307 extra examples remain unchanged. Training indices
 are shuffled once per epoch with a seeded NumPy generator. Batches are loaded
 on demand through ROIDataset, then transferred to JAX. With 1,240 examples and
@@ -106,7 +116,7 @@ with open('outputs/roi/history.json') as stream:
     history = json.load(stream)
 fig = plot_learning_curves(history, metrics=('loss', 'iou', 'fbeta'),
     best_modes={'loss': 'min', 'iou': 'max', 'fbeta': 'max'},
-    output_path='docs/images/roi/learning_curves.png')
+    output_path='outputs/roi/learning_curves.png')
 plt.show()
 ```
 

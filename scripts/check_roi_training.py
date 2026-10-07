@@ -20,6 +20,36 @@ def tree_equal(a, b):
         jax.tree_util.tree_leaves(a), jax.tree_util.tree_leaves(b)))
 
 
+@jax.jit
+def checked_update(state, images, masks):
+    """Inspect gradients here rather than adding tree diagnostics to production."""
+    next_dropout_key, dropout_rng = jax.random.split(state.dropout_key)
+
+    def objective(params):
+        predictions, updates = state.apply_fn(
+            {'params': params, 'batch_stats': state.batch_stats}, images,
+            train=True, rngs={'dropout': dropout_rng}, mutable=['batch_stats'])
+        return training.roi_loss(masks, predictions), updates['batch_stats']
+
+    (loss, new_batch_stats), gradients = jax.value_and_grad(
+        objective, has_aux=True)(state.params)
+    gradients_finite = jnp.all(jnp.stack([
+        jnp.all(jnp.isfinite(leaf)) for leaf in jax.tree_util.tree_leaves(gradients)
+    ]))
+    expected_state = state.apply_gradients(grads=gradients).replace(
+        batch_stats=new_batch_stats, dropout_key=next_dropout_key)
+    return expected_state, loss, gradients_finite
+
+
+def check_update(state, images, masks):
+    expected, expected_loss, gradients_finite = checked_update(state, images, masks)
+    updated, result = training.train_step(state, images, masks)
+    assert bool(gradients_finite) and np.isfinite(result['loss'])
+    assert tree_equal(expected, updated)
+    np.testing.assert_array_equal(expected_loss, result['loss'])
+    return updated, result
+
+
 def check_numerics():
     y = jnp.array([1, 0, 1, 0], dtype=jnp.float32).reshape(1, 2, 2, 1)
     p = jnp.array([0.8, 0.7, 0.5, 0.1], dtype=jnp.float32).reshape(y.shape)
@@ -63,8 +93,7 @@ def main():
     state = training.create_train_state()
     x = jax.random.normal(jax.random.PRNGKey(5), (2, 32, 48, 3))
     y = (x[..., :1] > 0).astype(jnp.float32)
-    updated, result = training.train_step(state, x, y)
-    assert bool(result['gradients_finite']) and np.isfinite(result['loss'])
+    updated, result = check_update(state, x, y)
     assert not tree_equal(state.params, updated.params)
     assert not tree_equal(state.batch_stats, updated.batch_stats)
     assert not tree_equal(state.dropout_key, updated.dropout_key)
@@ -72,8 +101,8 @@ def main():
     assert tree_equal(updated, repeated)
     changed_rng, _ = training.train_step(state.replace(dropout_key=jax.random.PRNGKey(99)), x, y)
     assert not tree_equal(updated.params, changed_rng.params)
-    second, result = training.train_step(updated, x, y)
-    assert int(second.step) == 2 and bool(result['gradients_finite'])
+    second, result = check_update(updated, x, y)
+    assert int(second.step) == 2
     before_stats = jax.device_get(second.batch_stats)
     prediction, metrics = training.eval_step(second, x, y)
     again, _ = training.eval_step(second, x, y)

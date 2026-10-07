@@ -16,6 +16,9 @@ from flax.training import train_state
 from water_meter_ocr.roi_model import ROIUNet
 
 
+# Losses and metrics
+
+
 def dice_loss(y_true, y_pred):
     """Per-image soft Dice loss over HWC; empty/empty has zero loss."""
     intersection = jnp.sum(y_true * y_pred, axis=(1, 2, 3))
@@ -54,7 +57,12 @@ def fbeta_score(y_true, y_pred):
     return 2 * tp / jnp.where(denominator > 0, denominator, 1)
 
 
+# Training state
+
+
 class ROITrainState(train_state.TrainState):
+    # BatchNorm statistics are state, not parameters optimized by gradients.
+    # Keep the RNG here so checkpoints also restore the next Dropout update.
     batch_stats: object
     dropout_key: jax.Array
 
@@ -71,32 +79,41 @@ def create_train_state(seed=1111, learning_rate=2e-4, residual=False,
         batch_stats=variables['batch_stats'], dropout_key=dropout_key)
 
 
+# Train/evaluation steps
+
+
+# Compile repeated steps; the model/optimizer update remains explicit below.
 @jax.jit
 def train_step(state, images, masks):
-    next_key, step_key = jax.random.split(state.dropout_key)
+    # JAX randomness is explicit: use one key now and retain the next key.
+    next_dropout_key, dropout_rng = jax.random.split(state.dropout_key)
 
     def objective(params):
         predictions, updates = state.apply_fn(
             {'params': params, 'batch_stats': state.batch_stats}, images,
-            train=True, rngs={'dropout': step_key}, mutable=['batch_stats'])
-        return roi_loss(masks, predictions), (predictions, updates['batch_stats'])
+            train=True, rngs={'dropout': dropout_rng}, mutable=['batch_stats'])
+        loss = roi_loss(masks, predictions)
+        return loss, (predictions, updates['batch_stats'])
 
-    (loss, (predictions, batch_stats)), gradients = jax.value_and_grad(
+    # Compute the loss and its parameter gradients together. Auxiliary outputs
+    # carry predictions and updated BatchNorm statistics without differentiating them.
+    (loss, (predictions, new_batch_stats)), gradients = jax.value_and_grad(
         objective, has_aux=True)(state.params)
-    finite = jnp.all(jnp.stack([jnp.all(jnp.isfinite(g))
-                               for g in jax.tree_util.tree_leaves(gradients)]))
-    state = state.apply_gradients(grads=gradients).replace(
-        batch_stats=batch_stats, dropout_key=next_key)
-    return state, {'loss': loss, 'counts': pixel_counts(masks, predictions),
-                   'gradients_finite': finite}
+    state = state.apply_gradients(grads=gradients)
+    state = state.replace(batch_stats=new_batch_stats, dropout_key=next_dropout_key)
+    return state, {'loss': loss, 'counts': pixel_counts(masks, predictions)}
 
 
 @jax.jit
 def eval_step(state, images, masks):
+    # Evaluation uses stored BatchNorm statistics: no RNG, mutation or gradients.
     predictions = state.apply_fn({'params': state.params, 'batch_stats': state.batch_stats},
                                  images, train=False)
     return predictions, {'loss': roi_loss(masks, predictions),
                           'counts': pixel_counts(masks, predictions)}
+
+
+# Batching
 
 
 def batches(dataset, batch_size, *, rng=None, drop_last=False):
@@ -112,6 +129,9 @@ def batches(dataset, batch_size, *, rng=None, drop_last=False):
         yield tuple(np.stack(items) for items in zip(*samples))
 
 
+# Epoch metrics
+
+
 class EpochMetrics:
     """Sample-weighted loss; global micro metrics, accumulated in host float64."""
     def __init__(self):
@@ -123,8 +143,6 @@ class EpochMetrics:
         result = jax.device_get(result)
         if not np.isfinite(result['loss']) or not np.isfinite(result['counts']).all():
             raise FloatingPointError('Non-finite loss or metric counts')
-        if not bool(result.get('gradients_finite', True)):
-            raise FloatingPointError('Non-finite gradients')
         self.loss_sum += float(result['loss']) * batch_size
         self.samples += batch_size
         self.counts += result['counts']
@@ -137,6 +155,9 @@ class EpochMetrics:
         return {'loss': self.loss_sum / self.samples,
                 'iou': float((tp + 1e-5) / (tp + fp + fn + 1e-5)),
                 'fbeta': float(2 * tp / denominator) if denominator else 0.0}
+
+
+# Checkpoint helpers
 
 
 def checkpoint_payload(state, epoch, best_val_loss, learning_rate, residual):
@@ -161,6 +182,9 @@ def restore_checkpoint(path, template_state, learning_rate=2e-4, residual=False)
             restored['learning_rate'], learning_rate, rtol=1e-6, atol=0):
         raise ValueError('Checkpoint configuration differs from restore template')
     return restored
+
+
+# Training loop
 
 
 def fit(state, train_dataset, valid_dataset, *, epochs=100, batch_size=16,
@@ -188,20 +212,21 @@ def fit(state, train_dataset, valid_dataset, *, epochs=100, batch_size=16,
     best_loss, waiting = float('inf'), 0
     for epoch in range(1, epochs + 1):
         start = time.perf_counter()
-        training, validation = EpochMetrics(), EpochMetrics()
+        train_metrics, validation_metrics = EpochMetrics(), EpochMetrics()
         for images, masks in batches(train_dataset, batch_size, rng=rng, drop_last=True):
             state, result = train_step(state, jax.device_put(images), jax.device_put(masks))
-            training.update(result, len(images))
+            train_metrics.update(result, len(images))
         for images, masks in batches(valid_dataset, 1):
             _, result = eval_step(state, jax.device_put(images), jax.device_put(masks))
-            validation.update(result, len(images))
-        train, valid = training.result(), validation.result()
-        if valid['loss'] < best_loss:
-            best_loss, waiting = valid['loss'], 0
+            validation_metrics.update(result, len(images))
+        train_results = train_metrics.result()
+        validation_results = validation_metrics.result()
+        if validation_results['loss'] < best_loss:
+            best_loss, waiting = validation_results['loss'], 0
             save_checkpoint(best_path, state, epoch, best_loss, learning_rate, residual)
         else:
             waiting += 1
-        for prefix, values in (('train', train), ('val', valid)):
+        for prefix, values in (('train', train_results), ('val', validation_results)):
             for key, value in values.items():
                 history[f'{prefix}_{key}'].append(value)
         history['epoch'].append(epoch)
@@ -210,8 +235,8 @@ def fit(state, train_dataset, valid_dataset, *, epochs=100, batch_size=16,
         temporary = history_path.with_suffix('.json.tmp')
         temporary.write_text(json.dumps(history, indent=2, allow_nan=False))
         temporary.replace(history_path)
-        print(f"Epoch {epoch}/{epochs} loss={train['loss']:.5f} val_loss={valid['loss']:.5f} "
-              f"IoU={train['iou']:.4f} val_IoU={valid['iou']:.4f} "
+        print(f"Epoch {epoch}/{epochs} loss={train_results['loss']:.5f} val_loss={validation_results['loss']:.5f} "
+              f"IoU={train_results['iou']:.4f} val_IoU={validation_results['iou']:.4f} "
               f"lr={learning_rate:g} time={history['epoch_time'][-1]:.1f}s", flush=True)
         if waiting >= patience:
             print(f'Early stopping after {waiting} epochs without improvement.', flush=True)
