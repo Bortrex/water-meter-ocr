@@ -102,6 +102,99 @@ def plot_learning_curves(history, metrics=('loss',), *,
 
     return fig
 
+def plot_benford_distribution(data_dir, output_path=None):
+    """Plot the Benford distribution of leading digits in the dataset."""
+    from water_meter_ocr.roi_preprocessing import load_split, load_pair
+    from collections import Counter
+
+    def grab_value_from_name(sentence, sep="."):
+        '''Function to grab the actual value from image name; due to problems in the CSV file.'''
+        start, end = "value_", ".jpg"
+        return sentence[sentence.find(start)+len(start) : sentence.rfind(end)].replace("_", sep)
+    
+    def first_significant_digit(value):
+        """Return the first non-zero digit of a meter reading."""
+        value = str(value).strip().replace(",", ".")
+
+        for char in value:
+            if char in "123456789":
+                return int(char)
+        return None
+    
+    split = load_split(data_dir)
+    
+    readings = [grab_value_from_name(filename) for filename in split.train + split.validation]
+    first_digits = [
+        first_significant_digit(value)
+        for value in readings
+    ]
+    first_digits = [
+        digit for digit in first_digits
+        if digit is not None
+    ]
+
+    counts = Counter(first_digits)
+    digits = np.arange(1, 10)
+
+    observed_counts = np.array(
+        [counts[digit] for digit in digits]
+    )
+    observed = observed_counts / observed_counts.sum()
+
+    # Benford's law:
+    # P(d) = log10(1 + 1/d)
+    expected = np.log10(1 + 1 / digits)
+
+    # mean absolute deviation- measure of the difference.
+    mad = np.mean(np.abs(observed - expected))
+
+    colors = plt.cm.nipy_spectral(
+        np.linspace(0.05, 0.90, len(digits))
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 5.5))
+
+    bars = ax.bar(digits,observed * 100, color=colors,
+        alpha=0.85, label="Observed",
+    )
+
+    ax.plot(digits, expected * 100, marker="o", linestyle="--",
+        linewidth=2, label="Benford's law",
+    )
+
+    for bar, percentage in zip(bars, observed * 100):
+        ax.annotate(
+            f"{percentage:.1f}%",
+            xy=(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.5,
+            ),
+            xytext=(4, 4), textcoords="offset points",
+            ha="left", va="bottom", fontsize=9,
+        )
+
+    ax.text(0.9, 0.9, f"MAD: {mad:.4f}",transform=ax.transAxes,
+        ha="right", va="top", fontsize=10)
+
+    ax.set_xlabel("First significant digit")
+    ax.set_ylabel("Frequency (%)")
+    ax.set_xticks(digits)
+    ax.set_title("First significant digit distribution")
+
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.grid(axis="y", alpha=0.25)
+    ax.legend()
+
+    fig.tight_layout()
+
+    if output_path is not None:
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path, dpi=300, bbox_inches="tight")
+
+    return fig
+
+
 if __name__ == '__main__':
     import matplotlib
     import json
@@ -110,7 +203,9 @@ if __name__ == '__main__':
     from water_meter_ocr.plotting import plot_learning_curves
     history = json.load(open('outputs/roi/history.json'))
 
-    fig = plot_learning_curves(history, ('loss', 'iou', 'fbeta'),
-                                   best_modes={'loss': 'min', 'iou': 'max', 'fbeta': 'max'},
-                                   output_path='docs/images/learning_curves.png')
+    # fig = plot_learning_curves(history, ('loss', 'iou', 'fbeta'),
+    #                                best_modes={'loss': 'min', 'iou': 'max', 'fbeta': 'max'},
+    #                                output_path='docs/images/learning_curves.png')
+
+    fig = plot_benford_distribution('data', output_path='docs/images/benford_distribution.png')
     plt.close(fig)

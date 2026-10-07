@@ -12,7 +12,7 @@ import numpy as np
 from water_meter_ocr.roi_model import ROIUNet
 
 
-def check_output(output: jax.Array, shape: tuple[int, ...]) -> None:
+def check_output(output, shape):
     output = np.asarray(output)
     assert output.shape == shape, output.shape
     assert output.dtype == np.float32, output.dtype
@@ -20,7 +20,7 @@ def check_output(output: jax.Array, shape: tuple[int, ...]) -> None:
     assert ((output >= 0) & (output <= 1)).all()
 
 
-def check_variant(residual: bool) -> tuple[int, list[tuple[int, ...]]]:
+def check_variant(residual):
     model = ROIUNet(use_residual_blocks=residual)
     label = "residual" if residual else "standard"
     print(f"{label}: initializing on (1, 720, 720, 3)", flush=True)
@@ -69,7 +69,7 @@ def check_variant(residual: bool) -> tuple[int, list[tuple[int, ...]]]:
     return count, shapes
 
 
-def main() -> None:
+def main():
     print(f"JAX {jax.__version__}; devices: {jax.devices()}", flush=True)
     standard_count, standard_shapes = check_variant(False)
     jax.clear_caches()

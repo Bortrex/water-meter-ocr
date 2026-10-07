@@ -7,7 +7,6 @@ Training-mode application needs mutable=['batch_stats'] and a 'dropout' RNG;
 the returned batch_stats must be retained by the eventual training code.
 """
 
-import jax
 import jax.numpy as jnp
 from flax import linen as nn
 
@@ -21,7 +20,7 @@ class ConvAct(nn.Module):
     activate: bool = True
 
     @nn.compact
-    def __call__(self, x: jax.Array, *, train: bool) -> jax.Array:
+    def __call__(self, x, *, train):
         x = nn.Conv(
             self.features, (3, 3), strides=self.strides, padding="SAME",
             use_bias=not self.batch_norm, kernel_init=nn.initializers.he_normal(),
@@ -43,7 +42,7 @@ class ConvBlock(nn.Module):
     use_residual_blocks: bool = False
 
     @nn.compact
-    def __call__(self, x: jax.Array, *, train: bool) -> jax.Array:
+    def __call__(self, x, *, train):
         shortcut = x
         x = ConvAct(self.features, self.batch_norm, name="first")(x, train=train)
         if self.dropout_rate:
@@ -68,7 +67,7 @@ class EncoderBlock(nn.Module):
     use_residual_blocks: bool = False
 
     @nn.compact
-    def __call__(self, x: jax.Array, *, train: bool) -> tuple[jax.Array, jax.Array]:
+    def __call__(self, x, *, train):
         skip = ConvBlock(self.features, batch_norm=self.batch_norm,
                          use_residual_blocks=self.use_residual_blocks,
                          name="block")(x, train=train)
@@ -85,7 +84,7 @@ class DecoderBlock(nn.Module):
     use_residual_blocks: bool = False
 
     @nn.compact
-    def __call__(self, x: jax.Array, skip: jax.Array, *, train: bool) -> jax.Array:
+    def __call__(self, x, skip, *, train):
         x = nn.ConvTranspose(
             self.features, (2, 2), strides=(2, 2), padding="SAME",
             # Keras stores transposed-convolution kernels as HWOI.
@@ -111,7 +110,7 @@ class ROIUNet(nn.Module):
     use_residual_blocks: bool = False
 
     @nn.compact
-    def __call__(self, x: jax.Array, *, train: bool = False) -> jax.Array:
+    def __call__(self, x, *, train = False):
         if x.ndim != 4 or x.shape[-1] != 3:
             raise ValueError(f"Expected NHWC input with 3 channels, got {x.shape}")
         if any(size <= 0 or size % 16 for size in x.shape[1:3]):

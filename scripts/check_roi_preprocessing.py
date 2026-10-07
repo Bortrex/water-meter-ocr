@@ -19,7 +19,7 @@ from water_meter_ocr.roi_preprocessing import (
 )
 
 
-def check_geometry() -> None:
+def check_geometry():
     # An asymmetric synthetic foreground makes incorrect paired geometry visible.
     mask = np.zeros((960, 720, 1), dtype=np.float32)
     mask[100:650, 90:300] = 1
@@ -46,7 +46,7 @@ def check_geometry() -> None:
     print("Paired geometric alignment: passed (5 forced cases per policy)")
 
 
-def main(data_dir: Path) -> None:
+def main(data_dir):
     assert A.__version__ == "2.0.8", A.__version__
     split = load_split(data_dir)
     names = pd.read_csv(data_dir / "data.csv")["photo_name"].to_numpy()

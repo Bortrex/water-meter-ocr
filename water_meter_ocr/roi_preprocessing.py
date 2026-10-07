@@ -14,7 +14,6 @@ or written to disk. Create separate instances for independent consumers.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 import albumentations as A
 import cv2
@@ -32,7 +31,7 @@ class ROISplit:
     extra: tuple[str, ...]
 
 
-def load_split(data_dir: str | Path = "data") -> ROISplit:
+def load_split(data_dir = "data"):
     """Split photo_name in CSV order and select the notebook's extra copies."""
     root = Path(data_dir)
     names = pd.read_csv(root / "data.csv")["photo_name"]
@@ -52,7 +51,7 @@ def load_split(data_dir: str | Path = "data") -> ROISplit:
     return ROISplit(tuple(train), tuple(validation), tuple(extra))
 
 
-def load_pair(data_dir: str | Path, filename: str) -> tuple[np.ndarray, np.ndarray]:
+def load_pair(data_dir, filename):
     """Load RGB image and thresholded single-channel mask at 960h x 720w."""
     root = Path(data_dir)
     image = cv2.imread(str(root / "images" / filename))
@@ -65,7 +64,7 @@ def load_pair(data_dir: str | Path, filename: str) -> tuple[np.ndarray, np.ndarr
     return image, (mask >= 200).astype(np.float32)[..., None]
 
 
-def training_augmentation(seed: int = SEED) -> A.Compose:
+def training_augmentation(seed = SEED):
     return A.Compose([
         A.ShiftScaleRotate(
             shift_limit=0.0625, scale_limit=0.1, rotate_limit=15,
@@ -102,7 +101,7 @@ def training_augmentation(seed: int = SEED) -> A.Compose:
     ], seed=seed)
 
 
-def extra_augmentation(seed: int = SEED) -> A.Compose:
+def extra_augmentation(seed = SEED):
     return A.Compose([
         A.Resize(height=720, width=720, interpolation=cv2.INTER_NEAREST,
                  mask_interpolation=cv2.INTER_NEAREST, p=1),
@@ -112,7 +111,7 @@ def extra_augmentation(seed: int = SEED) -> A.Compose:
     ], seed=seed)
 
 
-def validation_augmentation(seed: int = SEED) -> A.Compose:
+def validation_augmentation(seed = SEED):
     # 0.5.1 padded by reflection; 2.0.8 defaults to constant padding instead.
     return A.Compose([
         A.PadIfNeeded(min_height=768, min_width=960,
@@ -120,14 +119,14 @@ def validation_augmentation(seed: int = SEED) -> A.Compose:
     ], seed=seed)
 
 
-def imagenet_preprocess(image: np.ndarray) -> np.ndarray:
+def imagenet_preprocess(image):
     """Keras default caffe preprocessing: RGB -> BGR, subtract means, no scaling."""
     image = image[..., ::-1].astype(np.float32, copy=True)
     image -= np.array([103.939, 116.779, 123.68], dtype=np.float32)
     return np.ascontiguousarray(image)
 
 
-def sanitize_mask(mask: np.ndarray) -> np.ndarray:
+def sanitize_mask(mask):
     mask = np.round(mask).clip(0, 1).astype(np.float32)
     return mask[..., None] if mask.ndim == 2 else mask
 
@@ -139,9 +138,9 @@ class ROIDataset:
     shuffling/repeated reads cannot accidentally switch an example's policy.
     """
 
-    def __init__(self, filenames: Sequence[str], data_dir: str | Path = "data",
-                 *, extra_filenames: Sequence[str] = (),
-                 validation: bool = False, seed: int = SEED):
+    def __init__(self, filenames, data_dir = "data",
+                 *, extra_filenames = (),
+                 validation = False, seed = SEED):
         normal, extra = tuple(filenames), tuple(extra_filenames)
         if validation and extra:
             raise ValueError("Validation cannot contain extra training copies")
@@ -154,10 +153,10 @@ class ROIDataset:
                              else training_augmentation(seed))
         self.extra_augmentation = extra_augmentation(seed) if extra else None
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.filenames)
 
-    def __getitem__(self, index: int) -> tuple[np.ndarray, np.ndarray]:
+    def __getitem__(self, index):
         if index < 0:
             index += len(self)
         if not 0 <= index < len(self):
