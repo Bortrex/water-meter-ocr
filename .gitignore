@@ -12,3 +12,4 @@ kaggle.json
 OLD_NRB_digit_recon-sequence_num-Model2.ipynb
 
 *.ipynb_checkpoints
+*.ipynb
