@@ -1,0 +1,13 @@
+# JAX training, model definitions, optimization, and checkpointing
+jax[cuda13]
+flax
+optax
+orbax-checkpoint
+
+# Image preprocessing, metadata, splits, augmentation, and visualization
+numpy
+pandas
+scikit-learn
+opencv-python-headless
+albumentations==2.0.8
+matplotlib
