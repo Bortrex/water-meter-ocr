@@ -1,4 +1,7 @@
-"""Run local ROI checks without writing datasets: python check_roi_preprocessing.py."""
+"""Run local ROI checks without writing datasets, from the repository root:
+
+    python -m scripts.check_roi_preprocessing --data-dir data
+"""
 
 import argparse
 from copy import deepcopy
@@ -10,7 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-from roi_preprocessing import (
+from water_meter_ocr.roi_preprocessing import (
     ROIDataset, extra_augmentation, imagenet_preprocess, load_pair, load_split,
     training_augmentation, validation_augmentation,
 )
