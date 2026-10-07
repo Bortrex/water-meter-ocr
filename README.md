@@ -85,4 +85,36 @@ A direct end-to-end OCR approach on the raw full image would need to solve local
 
 ## ROI detection
 
-TODO:
+The ROI detector performs semantic segmentation to identify the display region containing the water-meter reading. The predicted mask is then used by the next stage of the pipeline to isolate and align the reading before sequence recognition.
+
+<p align="center">
+  <img src="docs/images/roi_result.png" alt="Example ROI detection result" width="420">
+</p>
+
+### Usage
+
+The model can be trained from the repository root with:
+
+```bash
+python -m scripts.train_roi \
+  --data-dir data \
+  --epochs 100 \
+  --batch-size 16 \
+  --learning-rate 0.0002 \
+  --seed 1111 \
+  --checkpoint-dir checkpoints/roi \
+  --output-dir outputs/roi
+```
+
+The model was trained by monitoring validation loss and keeping the best checkpoint automatically.
+
+
+| Metric | Best validation value | Epoch |
+|------|:---------------------:|:-----:|
+| Loss   | 0.0638                | 94    |
+| IoU    | 0.8870                | 95    |
+| $F_\beta$  | 0.9401                | 95    |
+
+
+Training converged smoothly over 100 epochs, with validation metrics remaining close to the training behavior. The checkpoint used for the final model is selected according to the lowest validation loss, corresponding to epoch 94.
+
