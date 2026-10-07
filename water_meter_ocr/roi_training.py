@@ -191,10 +191,12 @@ def fit(state, train_dataset, valid_dataset, *, epochs=100, batch_size=16,
         learning_rate=2e-4, seed=1111, checkpoint_dir='checkpoints/roi',
         output_dir='outputs/roi', residual=False, patience=15):
     """Fixed-LR baseline. Return best model state and JSON-compatible epoch history."""
+    
     if epochs <= 0 or patience <= 0 or batch_size <= 0 or learning_rate <= 0:
         raise ValueError('epochs, patience, batch_size and learning_rate must be positive')
     if len(train_dataset) < batch_size or not len(valid_dataset):
         raise ValueError('Need one full training batch and nonempty validation')
+    
     best_path = Path(checkpoint_dir).resolve() / 'best'
     output_dir = Path(output_dir)
     history_path = output_dir / 'history.json'
