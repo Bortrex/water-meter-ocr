@@ -1,4 +1,3 @@
-"""Train the ROI baseline: python -m scripts.train_roi --help."""
 import argparse
 from pathlib import Path
 

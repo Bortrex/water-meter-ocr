@@ -1,4 +1,3 @@
-"""Generic learning curves from train_<metric>/val_<metric> history lists."""
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np

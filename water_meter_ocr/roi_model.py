@@ -1,12 +1,3 @@
-"""Flax ROI U-Net based on cell 41 of the 2021 ROI detection notebook.
-
-Inputs are float NHWC batches with three channels and spatial sizes divisible
-by 16 (including 720 and 960). Outputs are NHWC one-channel probabilities.
-Pass train=False for evaluation, using the initialized params and batch_stats.
-Training-mode application needs mutable=['batch_stats'] and a 'dropout' RNG;
-the returned batch_stats must be retained by the eventual training code.
-"""
-
 import jax.numpy as jnp
 from flax import linen as nn
 

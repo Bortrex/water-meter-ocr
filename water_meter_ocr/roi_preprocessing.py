@@ -1,17 +1,3 @@
-"""On-demand ROI preprocessing from the 2021 notebook (Albumentations 2.0.8).
-
-Usage::
-
-    split = load_split("data")
-    train = ROIDataset(split.train, "data", extra_filenames=split.extra)
-    valid = ROIDataset(split.validation, "data", validation=True)
-    image, mask = train[0]
-
-Outputs are HWC float32 arrays. A seeded dataset reproduces the same sequence
-of calls; its augmentation RNG advances on each access. No samples are cached
-or written to disk. Create separate instances for independent consumers.
-"""
-
 from dataclasses import dataclass
 from pathlib import Path
 

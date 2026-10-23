@@ -1,7 +1,3 @@
-"""Explicit ROI baseline losses, state, steps, batching and best-model training.
-
-See ROI_TRAINING.md for historical defaults and deliberate numerical differences.
-"""
 from pathlib import Path
 import json
 import time
