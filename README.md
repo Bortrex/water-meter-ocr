@@ -62,7 +62,7 @@ The observed first-digit frequencies are broadly consistent with Benford's law, 
 The full OCR solution follows a **two-stage pipeline**:
 
 <p align="center">
-  <img src="docs/images/solution_pipeline.png" alt="Water-meter OCR pipeline" width="850">
+  <img src="docs/images/solution_pipeline_bg.png" alt="Water-meter OCR pipeline" width="850">
 </p>
 
 ### 1. ROI detection
